@@ -15,7 +15,6 @@ export function EmpreendimentosGrid({ onOpen }) {
     <div className="space-y-6">
       <header className="mb-2">
         <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Empreendimentos</h1>
-        <p className="text-zinc-400 mt-2">Vitrine ilustrada — 3 por linha, até 3 linhas (9 por página)</p>
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
