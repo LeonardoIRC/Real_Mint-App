@@ -1,8 +1,9 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "landing/dist",
-  "installCommand": "cd landing && npm install",
+  "buildCommand": "npm install && npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install",
   "framework": "vite",
+  "rootDirectory": "landing",
   "rewrites": [
     {
       "source": "/(.*)",
