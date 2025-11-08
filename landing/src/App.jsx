@@ -120,7 +120,14 @@ function PlatformApp() {
             <LendPage onBack={() => setNewfiView("home")} />
           ))}
 
-        {tab === "investors" && <InvestorsPage onBack={() => setTab("empreendimentos")} />}
+        {tab === "investors" && (
+          <InvestorsPage
+            onBack={() => {
+              setTab("newfi");
+              setNewfiView("home");
+            }}
+          />
+        )}
 
         {tab === "infra" && <InfraDashboard onNavigate={navigateToPlatform} />}
 

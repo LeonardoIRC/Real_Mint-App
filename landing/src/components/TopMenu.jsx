@@ -1,6 +1,6 @@
 // Menu superior de navegação
 
-import { IHome, IChart, IWallet, ISettings, IPie } from "./icons";
+import { IHome, IChart, IWallet, ISettings } from "./icons";
 import { RealMintLogo } from "./RealMintLogo";
 import { AccountIndicator } from "./AccountIndicator";
 
@@ -10,7 +10,6 @@ export function TopMenu({ current, onChange }) {
     { key: "empreendimentos", label: "Empreendimentos", icon: IHome },
     { key: "status", label: "Status", icon: IChart },
     { key: "newfi", label: "NewFi", icon: IWallet },
-    { key: "investors", label: "Investidores", icon: IPie },
     { key: "infra", label: "Conta", icon: ISettings },
   ];
   return (
