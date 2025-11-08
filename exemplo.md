@@ -1,0 +1,1009 @@
+# Exemplo de Código - UI Funcional
+
+Este arquivo contém um exemplo de código que funcionou bem em termos de UX/UI dentro do ChatGPT e pode ser usado como referência ou inspiração para o projeto.
+
+---
+
+## Código de Exemplo
+
+Cole seu código aqui:
+
+```jsx
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tokenização Imobiliária — MVP (No-Build)</title>
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { color-scheme: dark; }
+    html, body, #root { height: 100%; background: #0a0a0b; }
+  </style>
+  <!-- React + ReactDOM (dev) -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <!-- Babel Standalone (permite JSX sem build) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-50">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, createContext, useContext } = React;
+
+    /* ==========================
+       Pequena lib de ícones (Lucide inline)
+       (mesmas formas dos ícones Lucide; sem pacote npm)
+    ========================== */
+    const Icon = ({ d, stroke="currentColor", className="w-4 h-4" }) => (
+      <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        {Array.isArray(d) ? d.map((seg,i)=><path d={seg} key={i}/>) : <path d={d}/>}
+      </svg>
+    );
+    const IHome      = (p)=> <Icon {...p} d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9.5z" />;
+    const IChart     = (p)=> <Icon {...p} d={["M3 3v18h18","M7 13v5","M12 8v10","M17 11v7"]} />;
+    const IWallet    = (p)=> <Icon {...p} d={["M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z","M16 12h.01"]} />;
+    const IUsers     = (p)=> <Icon {...p} d={["M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2","M12 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0","M20 8a3 3 0 1 1-6 0"]} />;
+    const IPie       = (p)=> <Icon {...p} d={["M21.21 15.89A10 10 0 1 1 8.11 2.79","M22 12A10 10 0 0 0 12 2v10z"]} />;
+    const IArrowLeft = (p)=> <Icon {...p} d={["M19 12H5","M12 19l-7-7 7-7"]} />;
+    const ICoins     = (p)=> <Icon {...p} d={["M11 19c-5 0-9-1.79-9-4s4-4 9-4 9 1.79 9 4-4 4-9 4z","M20 11V7","M4 7v4","M20 7c0 2.21-4 4-9 4S2 9.21 2 7s4-4 9-4 9 1.79 9 4z"]} />;
+    const ISettings  = (p)=> <Icon {...p} d={["M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z","M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.05a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06A2 2 0 1 1 3.21 17.9l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H2a2 2 0 1 1 0-4h.05a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06A2 2 0 1 1 6 3.21l.06.06a1.65 1.65 0 0 0 1.82.33H8a1.65 1.65 0 0 0 1-1.51V2a2 2 0 1 1 4 0v.05a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06A2 2 0 1 1 20.79 6l-.06.06a1.65 1.65 0 0 0-.33 1.82V8c0 .68.4 1.3 1.02 1.58.62.29 1.02.91 1.02 1.59s-.4 1.3-1.02 1.58A1.77 1.77 0 0 0 19.4 15z"]} />;
+
+    /* ==========================
+       Utils / Estado Infra
+    ========================== */
+    const BRL = new Intl.NumberFormat("pt-BR",{ style:"currency", currency:"BRL" });
+
+    // localStorage helper
+    const NS = "rimt";
+    const store = {
+      get: (k,f=null)=>{ try{const r=localStorage.getItem(NS+":"+k); return r?JSON.parse(r):f;}catch{return f;} },
+      set: (k,v)=>{ try{localStorage.setItem(NS+":"+k,JSON.stringify(v));}catch{} },
+      rem: (k)=>{ try{localStorage.removeItem(NS+":"+k);}catch{} }
+    };
+
+    /* ==========================
+       Dados mock — projetos / negativos
+    ========================== */
+    const projects = [
+      { key:"vila-nova", name:"Condomínio Vila Nova", city:"São Paulo - SP", status:"green" },
+      { key:"jardim-aguas", name:"Residencial Jardim das Águas", city:"Curitiba - PR", status:"green" },
+      { key:"horizonte-park", name:"Horizonte Park", city:"Campinas - SP", status:"green" },
+      { key:"monte-verde", name:"Monte Verde Residences", city:"Belo Horizonte - MG", status:"red" },
+      { key:"praia-azul", name:"Praia Azul Condominium", city:"Florianópolis - SC", status:"green" },
+      { key:"solar-vale", name:"Solar do Vale", city:"Vitória - ES", status:"green" },
+      { key:"parque-palmeiras", name:"Parque das Palmeiras", city:"Rio de Janeiro - RJ", status:"yellow" },
+      { key:"bella-vista", name:"Bella Vista Towers", city:"Porto Alegre - RS", status:"green" },
+      { key:"residencial-aurora", name:"Residencial Aurora", city:"Fortaleza - CE", status:"red" },
+      { key:"realmint-garden", name:"RealMint Garden", city:"São José dos Campos - SP", status:"green" },
+      { key:"porto-verde", name:"Porto Verde Homes", city:"Santos - SP", status:"green" },
+      { key:"alto-da-serra", name:"Alto da Serra Residences", city:"Petrópolis - RJ", status:"green" },
+    ];
+    const projectNegatives = {
+      "parque-palmeiras":[
+        { id:"T1-110", type:"amarelo", text:"Atraso na atualização de manutenção — última sync há 36h" },
+        { id:"T1-204", type:"amarelo", text:"Pendente confirmação de taxa de registro (cartório)" },
+      ],
+      "residencial-aurora":[
+        { id:"Torre A-302", type:"vermelho", text:"Hash de escritura divergente" },
+        { id:"Torre A-901", type:"vermelho", text:"Metadados inconsistentes (owner)" },
+      ],
+      "monte-verde":[
+        { id:"Torre B-204", type:"vermelho", text:"Assinatura do contrato inválida" },
+        { id:"Torre A-303", type:"vermelho", text:"Documento fora do padrão (schema)" },
+      ],
+      "vila-nova":[
+        { id:"T2-104", type:"amarelo", text:"Atraso na atualização (48h)" },
+        { id:"T3-302", type:"vermelho", text:"Alteração não esperada em documento" },
+      ],
+    };
+
+    /* ==========================
+       App State Global (sem libs)
+    ========================== */
+    const AppCtx = createContext(null);
+    const useApp = ()=> useContext(AppCtx);
+
+    function AppProvider({children}) {
+      // Sessão
+      const [user, setUser] = useState(store.get("user", null));
+      const loginEmail = (email)=>{
+        const u = { id:"user_"+Math.random().toString(36).slice(2), email, createdAt:Date.now(), method:"email_mock" };
+        setUser(u); store.set("user",u); return u;
+      };
+      const loginPasskey = async ()=>{
+        await new Promise(r=>setTimeout(r,500));
+        const u = { id:"user_"+Math.random().toString(36).slice(2), email:null, createdAt:Date.now(), method:"passkey_stub" };
+        setUser(u); store.set("user",u); return u;
+      };
+      const logout = ()=>{ setUser(null); store.rem("user"); };
+
+      // KYC
+      const [kyc, setKyc] = useState(store.get("kyc_status",{ status:"not_started" }));
+      useEffect(()=>{ store.set("kyc_status",kyc); },[kyc]);
+      const startKycMock = async ()=>{ setKyc({status:"in_progress",provider:"mock",startedAt:Date.now()}); await new Promise(r=>setTimeout(r,1200)); setKyc({status:"approved",provider:"mock",approvedAt:Date.now()}); };
+
+      // Wallet 4337 (mock)
+      const [settings, setSettings] = useState(store.get("4337_settings",{
+        chain:"base-sepolia",
+        bundlerUrl:"https://bundler.example/sepolia",
+        paymasterEnabled:false,
+        sessionKey:null,
+      }));
+      useEffect(()=>{ store.set("4337_settings",settings); },[settings]);
+
+      const [wallet, setWallet] = useState(store.get("4337_wallet", null));
+      const createWallet = ()=>{
+        if(!user) throw new Error("Faça login antes.");
+        const addr = "0x"+ btoa(user.id).slice(0,38).replace(/[^a-zA-Z0-9]/g,"a");
+        const w = { address:(addr+"0".repeat(42)).slice(0,42), owner:user.id, createdAt:Date.now(), chain:settings.chain };
+        setWallet(w); store.set("4337_wallet",w); return w;
+      };
+
+      const updateBundler = (url)=> setSettings(s=>({...s, bundlerUrl:url}));
+      const updateChain = (chain)=> { setSettings(s=>({...s,chain})); if(wallet) { const w={...wallet,chain}; setWallet(w); store.set("4337_wallet",w); } }
+      const togglePaymaster = (flag)=> setSettings(s=>({...s, paymasterEnabled:!!flag}));
+      const setSessKey = (key)=> setSettings(s=>({...s, sessionKey: key || null}));
+
+      const [uoLedger, setUoLedger] = useState(store.get("4337_ledger",[]));
+      useEffect(()=>{ store.set("4337_ledger", uoLedger); },[uoLedger]);
+      const sendOp = async ({to,data="0x",value="0",note})=>{
+        if(!wallet) throw new Error("Wallet inexistente");
+        const entry = {
+          id:"uo_"+Math.random().toString(36).slice(2),
+          from:wallet.address, to, value, data,
+          chain:settings.chain, bundlerUrl:settings.bundlerUrl,
+          paymaster: settings.paymasterEnabled ? "sponsored" : "none",
+          sessionKeyUsed: !!settings.sessionKey,
+          note: note||"op", status:"included", timestamp:Date.now()
+        };
+        await new Promise(r=>setTimeout(r,600));
+        setUoLedger(l=>[entry, ...l]);
+        return entry;
+      };
+
+      // Operating balance
+      const [opBalance, setOpBalance] = useState(store.get("operating_balance",0));
+      const [opLedger, setOpLedger] = useState(store.get("operating_balance_ledger",[]));
+      useEffect(()=>{ store.set("operating_balance",opBalance); },[opBalance]);
+      useEffect(()=>{ store.set("operating_balance_ledger",opLedger); },[opLedger]);
+      const deposit = (amount)=>{
+        const a = Math.max(0, Number(amount)||0);
+        const nb = opBalance + a; setOpBalance(nb);
+        setOpLedger(l=>[{ id:"tx_"+Math.random().toString(36).slice(2), type:"deposit", amount:a, balance:nb, timestamp:Date.now() }, ...l]);
+      };
+      const withdraw = (amount)=>{
+        const a = Math.max(0, Number(amount)||0);
+        const nb = Math.max(0, opBalance - a); setOpBalance(nb);
+        setOpLedger(l=>[{ id:"tx_"+Math.random().toString(36).slice(2), type:"withdraw", amount:-a, balance:nb, timestamp:Date.now() }, ...l]);
+      };
+
+      const value = useMemo(()=>({
+        user, loginEmail, loginPasskey, logout,
+        kyc, setKyc, startKycMock,
+        wallet, settings, createWallet, updateBundler, updateChain, togglePaymaster, setSessKey, sendOp, uoLedger,
+        opBalance, opLedger, deposit, withdraw
+      }),[user,kyc,wallet,settings,uoLedger,opBalance,opLedger]);
+
+      return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
+    }
+
+    /* ==========================
+       Elementos visuais utilitários
+    ========================== */
+    const statusDot = (s)=> {
+      const base = "w-3.5 h-3.5 rounded-full";
+      if(s==="yellow") return base+" bg-yellow-400";
+      if(s==="red") return base+" bg-red-500";
+      return base+" bg-green-500";
+    };
+
+    const palettes = [
+      ["#22c55e","#14532d"],["#38bdf8","#0e7490"],["#f59e0b","#78350f"],
+      ["#a78bfa","#5b21b6"],["#f43f5e","#7f1d1d"],["#34d399","#065f46"],
+      ["#60a5fa","#1e3a8a"],["#eab308","#713f12"],["#c084fc","#581c87"],
+    ];
+    const LogoSVG = ({idx,title})=>{
+      const [c1,c2] = palettes[idx % palettes.length];
+      return (
+        <svg viewBox="0 0 300 170" role="img" aria-label={`Logo ${title}`} className="w-full h-full">
+          <defs><linearGradient id={`g-${idx}`} x1="0" x2="1">
+            <stop offset="0%" stopColor={c2} />
+            <stop offset="100%" stopColor={c1} />
+          </linearGradient></defs>
+          <rect width="300" height="170" fill="#0b0b0f"/>
+          <g transform="translate(20,20)">
+            <rect x="0" y="120" width="260" height="8" fill={c2} opacity="0.8"/>
+            <rect x="110" y="40" width="40" height="80" fill={`url(#g-${idx})`} rx="4"/>
+            <rect x="60" y="60" width="30" height="60" fill={`url(#g-${idx})`} opacity="0.8" rx="3"/>
+            <rect x="170" y="55" width="30" height="65" fill={`url(#g-${idx})`} opacity="0.9" rx="3"/>
+            {Array.from({length:5}).map((_,r)=>(
+              <g key={r}>
+                <rect x="68" y={65+r*10} width="14" height="4" fill="#0ea5e9" opacity="0.6"/>
+                <rect x="118" y={45+r*12} width="24" height="5" fill="#a3e635" opacity="0.6"/>
+                <rect x="178" y={60+r*10} width="14" height="4" fill="#fde047" opacity="0.6"/>
+              </g>
+            ))}
+          </g>
+          <text x="150" y="160" textAnchor="middle" fontSize="14" fill="#e5e7eb" fontFamily="ui-sans-serif, system-ui">{title}</text>
+        </svg>
+      );
+    };
+
+    /* ==========================
+       Menu Top
+    ========================== */
+    function TopMenu({ current, onChange }) {
+      const items = [
+        { key:"empreendimentos", label:"Empreendimentos", icon: IHome },
+        { key:"status",           label:"Status",         icon: IChart },
+        { key:"newfi",            label:"NewFi",          icon: IWallet },
+        { key:"infra",            label:"Conta",          icon: ISettings },
+      ];
+      return (
+        <nav className="flex items-center justify-center gap-8 py-4 bg-zinc-900 border-b border-zinc-800 sticky top-0 z-10">
+          {items.map(it=>(
+            <button key={it.key} onClick={()=>onChange(it.key)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition ${current===it.key? 'bg-zinc-800 text-green-400':'text-zinc-300 hover:text-white'}`}>
+              {React.createElement(it.icon,{className:"w-4 h-4"})}
+              <span>{it.label}</span>
+            </button>
+          ))}
+        </nav>
+      );
+    }
+
+    /* ==========================
+       Marketplace Empreendimentos
+    ========================== */
+    function EmpreendimentosGrid({ onOpen }) {
+      const [page,setPage] = useState(0);
+      const perPage = 9;
+      const total = Math.max(1, Math.ceil(projects.length/perPage));
+      const slice = projects.slice(page*perPage, page*perPage+perPage);
+
+      return (
+        <div className="space-y-6">
+          <header className="mb-2">
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Empreendimentos</h1>
+            <p className="text-zinc-400 mt-2">Vitrine ilustrada — 3 por linha, até 3 linhas (9 por página)</p>
+          </header>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+            {slice.map((p,i)=>(
+              <article key={p.key} className="bg-zinc-900/70 border border-zinc-800 rounded-2xl overflow-hidden hover:border-zinc-700 transition flex flex-col">
+                <div className="aspect-video w-full bg-zinc-800 flex items-center justify-center overflow-hidden">
+                  <LogoSVG idx={i} title={p.name}/>
+                </div>
+                <div className="p-4 w-full flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="font-medium text-zinc-100 truncate">{p.name}</h3>
+                    <p className="text-xs text-zinc-400 mt-1 truncate">{p.city}</p>
+                  </div>
+                  <span className={statusDot(p.status)} />
+                </div>
+                <div className="px-4 pb-4 w-full">
+                  <button onClick={()=>onOpen(p)} className="w-full text-center text-sm bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg py-2">Ver detalhes</button>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-center gap-2">
+            <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page===0}
+              className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 disabled:opacity-40">◀ Anterior</button>
+            <span className="text-sm text-zinc-400">Página {page+1} de {total}</span>
+            <button onClick={()=>setPage(p=>Math.min(total-1,p+1))} disabled={page>=total-1}
+              className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 disabled:opacity-40">Próxima ▶</button>
+          </div>
+        </div>
+      );
+    }
+
+    /* ==========================
+       Detalhes do Projeto / Unidades
+    ========================== */
+    const getTowerNames = (project)=> project.key==="vila-nova" ? ["Torre 1","Torre 2","Torre 3","Torre 4"] : ["Torre A","Torre B"];
+    const getPrimaryUnits = (project)=>{
+      const towers = getTowerNames(project);
+      return Array.from({length:12},(_,i)=>{
+        const tower = towers[i % towers.length];
+        const apt = `${Math.floor(i/4)+1}0${(i%4)+1}`;
+        const price = 350000 + i*10000;
+        return { id:`${tower} • Apto ${apt}`, tower, apt, price };
+      });
+    };
+    const enrichUnit = (u)=>{
+      const digits = String(u.apt);
+      const floor = digits.length===4 ? parseInt(digits.slice(0,2),10) : parseInt(digits.slice(0,1),10);
+      const number = parseInt(digits.slice(-2),10);
+      const views = ["vista cidade","vista parque","vista mar","vista interna"];
+      const vIdx = (floor+number)%views.length;
+      const bedrooms = 2 + (floor%2);
+      const bathrooms = bedrooms;
+      const suites = bedrooms>=3 ? 2 : 1;
+      const area = Math.round(65 + bedrooms*12 + floor*1.5);
+      return {...u, floor, number, view:views[vIdx], bedrooms, bathrooms, suites, area};
+    };
+
+    const UnitCard = ({ unit, onOpen })=>(
+      <button onClick={()=>onOpen?.(unit)} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 flex flex-col items-center gap-3 hover:border-zinc-700 transition">
+        <div className="w-16 h-16 rounded-xl border border-zinc-700 bg-zinc-800 relative overflow-hidden">
+          <div className="absolute inset-x-2 top-2 h-2 bg-zinc-600/40 rounded" />
+          <div className="absolute left-2 top-5 w-4 h-8 bg-zinc-700/60 rounded" />
+          <div className="absolute right-2 top-4 w-5 h-9 bg-zinc-700/80 rounded" />
+        </div>
+        <div className="text-center">
+          <div className="text-sm text-zinc-300">{unit.tower}</div>
+          <div className="text-xs text-zinc-400">Apto {unit.apt}</div>
+        </div>
+        <div className="text-center text-zinc-100 font-medium">{BRL.format(unit.price)}</div>
+      </button>
+    );
+    const PriceCard = ({ price })=>(
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 h-28 flex items-end justify-center">
+        <span className="text-zinc-100 font-medium">{BRL.format(price)}</span>
+      </div>
+    );
+
+    function CTAChips({ minPrice, bestBid, onOpenServices }) {
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button className="rounded-full border border-zinc-700 bg-zinc-900/70 px-6 py-4 text-left hover:border-zinc-600">
+            <div className="text-zinc-300 text-sm">Compre agora</div>
+            <div className="text-zinc-100 text-lg font-semibold">A partir de {BRL.format(minPrice)}</div>
+          </button>
+          <button className="rounded-full border border-zinc-700 bg-zinc-900/70 px-6 py-4 text-left hover:border-zinc-600">
+            <div className="text-zinc-300 text-sm">Faça uma oferta</div>
+            <div className="text-zinc-100 text-lg font-semibold">Maior oferta: {BRL.format(bestBid)}</div>
+          </button>
+          <button onClick={onOpenServices} className="rounded-full border-2 border-red-500/60 bg-red-500/5 px-6 py-4 text-left hover:bg-red-500/10">
+            <div className="text-red-300 text-sm">outros serviços ativos</div>
+            <div className="text-red-200/80 text-xs">empréstimo com imóvel em garantia</div>
+          </button>
+        </div>
+      );
+    }
+
+    function ProjectDetailPage({ project, onBack, onOpenServices, onOpenUnit }) {
+      const units = getPrimaryUnits(project);
+      const minPrice = Math.min(...units.map(u=>u.price));
+      const bestBid = Math.max(0, minPrice - 20000); // regra: maior oferta < menor preço
+      const recent = [minPrice, minPrice+10000, minPrice+20000];
+
+      return (
+        <div className="space-y-6">
+          <button onClick={onBack} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200">
+            <IArrowLeft className="w-4 h-4"/> Voltar
+          </button>
+          <h1 className="text-2xl md:text-3xl font-semibold">{project.name}</h1>
+          <p className="text-zinc-400">{project.city} • Localização e detalhes</p>
+
+          <CTAChips minPrice={minPrice} bestBid={bestBid} onOpenServices={onOpenServices} />
+
+          <section className="border border-zinc-800 rounded-2xl p-4 md:p-6 bg-zinc-950/60">
+            <h3 className="text-zinc-300 text-sm mb-4">Apartamentos disponíveis</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 mb-6">
+              {units.map(u=>(
+                <UnitCard key={u.id} unit={u} onOpen={(unit)=>onOpenUnit(enrichUnit(unit), project)} />
+              ))}
+            </div>
+            <h4 className="text-zinc-300 text-sm mb-3">Últimas negociações</h4>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+              {recent.map((p,idx)=><PriceCard key={idx} price={p} />)}
+            </div>
+          </section>
+        </div>
+      );
+    }
+
+    /* ==========================
+       STATUS (lista + detalhe condomínio)
+    ========================== */
+    const Legend = ()=>(
+      <div className="mt-8 text-sm text-zinc-400">
+        <div className="flex items-center gap-4 flex-wrap">
+          <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-green-500"></span> OK</span>
+          <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-yellow-400"></span> Atraso na atualização</span>
+          <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-red-500"></span> Alteração não esperada</span>
+        </div>
+      </div>
+    );
+
+    function ProjectList({ onOpen }) {
+      const rows = projects.slice(0,10);
+      return (
+        <>
+          <header className="mb-8">
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Status de Tokenização</h1>
+            <p className="text-zinc-400 mt-2">Clique em um empreendimento para ver os apartamentos</p>
+          </header>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {rows.map(p=>(
+              <button key={p.key} onClick={()=>onOpen(p)} className="flex items-center justify-between bg-zinc-900/70 border border-zinc-800 hover:border-zinc-700 transition rounded-2xl px-4 py-3 text-left">
+                <span className="text-base md:text-lg truncate pr-3">{p.name}</span>
+                <span className={statusDot(p.status)} />
+              </button>
+            ))}
+          </div>
+          <Legend/>
+        </>
+      );
+    }
+
+    const makeVilaNovaApts = ()=>{
+      const a=[];
+      for(let floor=1; floor<=14; floor++){ for(let apt=1; apt<=4; apt++){ a.push(`${floor}${apt.toString().padStart(2,"0")}`);} }
+      a.push("1501","1502"); return a;
+    };
+    const useCondoData = (projectKey, projectName)=>{
+      const isVN = projectKey==="vila-nova";
+      const towerNames = isVN ? ["Torre 1","Torre 2","Torre 3","Torre 4"] : ["Torre A","Torre B"];
+      const towers = towerNames.map(name=>({ name, apartments: isVN? makeVilaNovaApts() : makeVilaNovaApts().slice(0,40) }));
+      const negatives = projectNegatives[projectKey] || [];
+      return { name: projectName, towers, negatives };
+    };
+
+    function CondoDetail({ project, onBack }) {
+      const { towers, negatives, name } = useCondoData(project.key, project.name);
+      const [page,setPage] = useState(0);
+      const rowsPerPage = 10;
+      const maxRows = Math.max(...towers.map(t=>t.apartments.length));
+      const maxPage = Math.max(0, Math.ceil(maxRows/rowsPerPage)-1);
+      const slice = list => list.slice(page*rowsPerPage, page*rowsPerPage+rowsPerPage);
+
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <button onClick={onBack} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200">
+              <IArrowLeft className="w-4 h-4" /> Voltar
+            </button>
+            <h2 className="text-2xl md:text-3xl font-semibold">{name}</h2>
+          </div>
+
+          <section className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-4">
+            <h3 className="text-lg font-medium text-zinc-100 mb-3">Destaques</h3>
+            {negatives.length===0 ? (
+              <p className="text-zinc-400">Sem alertas no momento.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {negatives.map((n,i)=>(
+                  <span key={i} className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-sm ${n.type==='vermelho'?'bg-red-500/10 text-red-300 border-red-400/40':'bg-yellow-400/10 text-yellow-300 border-yellow-400/40'}`}>
+                    <span className={`w-2.5 h-2.5 rounded-full ${n.type==='vermelho'?'bg-red-500':'bg-yellow-400'}`} />
+                    <span className="font-medium">{n.id}</span>
+                    <span className="opacity-80">{n.text}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section>
+            <div className={`grid gap-4 ${project.key==="vila-nova"?'grid-cols-1 md:grid-cols-4':'grid-cols-1 md:grid-cols-2'}`}>
+              {towers.map(tower=>(
+                <div key={tower.name} className="bg-zinc-900/70 border border-zinc-800 rounded-2xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+                    <h4 className="font-medium text-zinc-100">{tower.name}</h4>
+                    <span className="text-xs text-zinc-400">{tower.apartments.length} apts</span>
+                  </div>
+                  <ul className="divide-y divide-zinc-800 max-h-[520px] overflow-auto">
+                    {slice(tower.apartments).map(apt=>(
+                      <li key={`${tower.name}-${apt}`} className="flex items-center justify-between px-4 py-2">
+                        <span className="text-zinc-200">Apto {apt}</span>
+                        <a href={`#doc-${tower.name}-${apt}`} className="flex items-center gap-2 text-green-400 hover:underline">
+                          <span className="w-3.5 h-3.5 rounded-full bg-green-500"></span>
+                          <span className="text-xs">Ver doc</span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+
+            {maxPage>0 && (
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page===0}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 disabled:opacity-40">◀ Anterior</button>
+                <span className="text-sm text-zinc-400">Página {page+1} de {maxPage+1}</span>
+                <button onClick={()=>setPage(p=>Math.min(maxPage,p+1))} disabled={page===maxPage}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 disabled:opacity-40">Próxima ▶</button>
+              </div>
+            )}
+          </section>
+
+          <Legend/>
+        </div>
+      );
+    }
+
+    /* ==========================
+       NewFi — Home, Acesso a Crédito, Empreste
+    ========================== */
+    const PercentMetric = ({value, color="text-green-400", caption})=>(
+      <div className={`col-span-1 text-right ${color}`}>
+        <div className="flex items-baseline justify-end font-semibold text-2xl leading-none">
+          <span>{value}%</span><span className="text-[0.6em] ml-1 opacity-90">a.a.</span>
+        </div>
+        {caption && <div className="mt-1 text-xs">{caption}</div>}
+      </div>
+    );
+    const AmountMetric = ({amount, color="text-purple-400", label})=>(
+      <div className={`col-span-1 text-right ${color}`}>
+        {label && <div className="text-xs mb-1">{label}</div>}
+        <div className="font-semibold text-2xl leading-none">{amount}</div>
+      </div>
+    );
+    const PillCard = ({title, icon:IconCmp, description, metric, onClick})=>(
+      <button onClick={onClick} className="grid grid-cols-4 w-full rounded-[28px] border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-900 transition p-5 md:p-6 items-center">
+        <div className="col-span-3 text-left">
+          <div className="flex items-center gap-2 text-zinc-100 font-semibold mb-2">
+            {React.createElement(IconCmp,{className:"w-4 h-4"})}<span>{title}</span>
+          </div>
+          <div className="text-zinc-300 text-sm leading-relaxed whitespace-pre-line">{description}</div>
+        </div>
+        {metric}
+      </button>
+    );
+
+    const NewFiHome = ({ onOpenCredit, onOpenLend, onBackToMain })=>(
+      <div className="space-y-8">
+        <header>
+          <button onClick={onBackToMain} className="flex items-center gap-2 mb-4 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200">
+            <IArrowLeft className="w-4 h-4"/> Voltar
+          </button>
+          <h1 className="text-3xl font-bold">NewFi</h1>
+          <p className="text-zinc-400 mt-2">Diferentes serviços financeiros estão disponíveis em nossa plataforma</p>
+        </header>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <PillCard
+            title="EMPRESTE"
+            icon={ICoins}
+            description={`Empreste reais para os donos dos nossos apartamentos e tenha um rendimento passivo com a segurança do imóvel em colateral.`}
+            metric={<PercentMetric value={20} color="text-green-400" caption={<span className="text-green-400">de rendimento atual</span>} />}
+            onClick={onOpenLend}
+          />
+          <PillCard
+            title="ACESSO A CRÉDITO"
+            icon={IWallet}
+            description={`Donos de apartamento têm acesso imediato a crédito sem análise usando o imóvel como colateral.`}
+            metric={<PercentMetric value={30} color="text-blue-400" caption={<span className="text-blue-400">taxa de emprestimo atual</span>} />}
+            onClick={onOpenCredit}
+          />
+          <PillCard
+            title="INVESTIDORES"
+            icon={IUsers}
+            description={`Deixem apartamentos em liquidez e ganhem trading fees garantindo liquidez para todo o ecossistema.`}
+            metric={<PercentMetric value={60} color="text-green-400" caption={<span className="text-green-400">de rendimento atual</span>} />}
+          />
+          <PillCard
+            title="EXPOSIÇÃO FRACIONADA"
+            icon={IPie}
+            description={`Facilitamos o sonho da casa própria. Compre as primeiras frações de seu apartamento em nosso condomínio e tenha acesso a todos os nossos serviços financeiros.`}
+            metric={<AmountMetric amount={"R$10.000"} color="text-purple-400" label="comece com apenas" />}
+          />
+        </div>
+      </div>
+    );
+
+    const ServicesPage = ({ project, onBack })=>{
+      const MAX=200000, RATE_AA=0.30, TERM=24;
+      const [valor,setValor] = useState(0);
+      return (
+        <div className="space-y-6">
+          <button onClick={onBack} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200">
+            <IArrowLeft className="w-4 h-4"/> Voltar
+          </button>
+          <h1 className="text-2xl md:text-3xl font-semibold">Acesso a Crédito • {project.name}</h1>
+          <p className="text-zinc-400">Empréstimo disponível para proprietários de unidades tokenizadas. O imóvel fica como <span className="text-zinc-200">garantia do crédito</span> e é negociado diretamente com a <span className="text-zinc-200">pool de empréstimos</span> (não há alienação fiduciária).</p>
+          <section className="border border-zinc-800 rounded-2xl p-4 md:p-6 bg-zinc-950/60 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-2xl border border-zinc-800 p-4">
+                <div className="text-zinc-400 text-sm">Valor até</div>
+                <div className="text-zinc-100 text-2xl font-semibold">{BRL.format(MAX)}</div>
+              </div>
+              <div className="rounded-2xl border border-zinc-800 p-4">
+                <div className="text-zinc-400 text-sm">Juros estimados</div>
+                <div className="text-green-400 text-2xl font-semibold">{(RATE_AA*100).toFixed(1)}% a.a.</div>
+                <div className="text-zinc-500 text-xs mt-1">abaixo da taxa média de hipoteca</div>
+              </div>
+              <div className="rounded-2xl border border-zinc-800 p-4">
+                <div className="text-zinc-400 text-sm">Prazo</div>
+                <div className="text-zinc-100 text-2xl font-semibold">{TERM} meses</div>
+              </div>
+            </div>
+            <ul className="list-disc pl-6 text-zinc-300 space-y-1">
+              <li>Imóvel como <strong>garantia</strong>, negociado com a pool de empréstimos (sem alienação fiduciária).</li>
+              <li>Não há análise de crédito.</li>
+              <li>Liberação imediata.</li>
+              <li>Qualquer proprietário pode acessar o crédito diretamente.</li>
+            </ul>
+            <div className="space-y-3">
+              <label className="text-zinc-300 text-sm">Quanto deseja pegar emprestado?</label>
+              <input type="range" min="0" max={MAX} step="1000" value={valor} onChange={(e)=>setValor(Number(e.target.value))} className="w-full accent-green-500" />
+              <div className="flex justify-between text-zinc-400 text-sm"><span>R$ 0</span><span>{BRL.format(valor)}</span><span>{BRL.format(MAX)}</span></div>
+              <button className="w-full rounded-lg bg-green-600/20 border border-green-500/40 hover:bg-green-600/30 px-4 py-3 text-green-200 mt-2">
+                Pegar empréstimo de {BRL.format(valor)}
+              </button>
+            </div>
+          </section>
+          <p className="text-xs text-zinc-500">*Valores e taxas ilustrativos para protótipo.</p>
+        </div>
+      );
+    };
+
+    // Empreste (mantido)
+    const LendPage = ({ onBack })=>{
+      const stats = { rendimento:20, poolValue:2500000, emprestimosAtivos:42, emprestadores:128 };
+      const [valor,setValor] = useState(50000);
+      const handleInput = (e)=>{
+        const only = e.target.value.replace(/[^0-9]/g,"");
+        const n = Number(only); setValor(isNaN(n)?0:n);
+      };
+      return (
+        <div className="space-y-8">
+          <div className="flex items-center justify-between">
+            <button onClick={onBack} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200">
+              <IArrowLeft className="w-4 h-4" /> Voltar
+            </button>
+          </div>
+          <header className="space-y-2">
+            <h1 className="text-3xl font-bold">Empreste</h1>
+            <p className="text-zinc-400 max-w-3xl">Empreste capital para os proprietários dos nossos empreendimentos e receba rendimento anual com colateral imobiliário tokenizado.</p>
+          </header>
+          <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5"><div className="text-zinc-400 text-sm">Rendimento anual</div><div className="text-green-400 text-3xl font-semibold">{stats.rendimento}%</div></div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5"><div className="text-zinc-400 text-sm">Valor total em pool</div><div className="text-zinc-100 text-2xl font-semibold">{BRL.format(stats.poolValue)}</div></div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5"><div className="text-zinc-400 text-sm">Empréstimos ativos</div><div className="text-blue-400 text-2xl font-semibold">{stats.emprestimosAtivos}</div></div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5"><div className="text-zinc-400 text-sm">Emprestadores ativos</div><div className="text-purple-400 text-2xl font-semibold">{stats.emprestadores}</div></div>
+          </section>
+          <section className="border border-zinc-800 rounded-2xl p-6 md:p-8 bg-zinc-950/60 space-y-4">
+            <h2 className="text-xl font-semibold text-zinc-100">Como funciona</h2>
+            <div className="grid md:grid-cols-2 gap-6 md:gap-8">
+              <div className="space-y-3 text-zinc-300">
+                <p className="leading-relaxed text-zinc-400">Quem empresta fornece liquidez para <span className="text-zinc-200">donos de apartamentos</span>. Crédito limitado a <span className="text-zinc-200">60% do valor de mercado</span> do apto como LTV.</p>
+                <p className="leading-relaxed text-zinc-400">Imóvel como colateral e liberação imediata. <span className="text-zinc-200">Qualquer valor é aceito</span> na pool.</p>
+                <p className="leading-relaxed text-zinc-400">Inadimplência: imóvel é <span className="text-zinc-200">liquidado no primeiro lance</span> ou pela pool, quitando o empréstimo e juros.</p>
+              </div>
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
+                <div className="mb-4">
+                  <div className="text-sm text-zinc-400 mb-1">Quanto deseja emprestar agora?</div>
+                  <div className="flex items-center gap-2">
+                    <input inputMode="numeric" pattern="[0-9]*" value={BRL.format(valor)} onChange={handleInput}
+                      className="flex-1 rounded-lg bg-zinc-950/60 border border-zinc-800 px-3 py-2 text-zinc-100 focus:outline-none focus:border-zinc-600"/>
+                  </div>
+                </div>
+                <input type="range" min={0} max={1000000} step={1000} value={valor} onChange={(e)=>setValor(Number(e.target.value))} className="w-full accent-green-500"/>
+                <div className="flex justify-between text-xs text-zinc-500 mt-1"><span>R$ 0</span><span>{BRL.format(valor)}</span><span>R$ 1.000.000</span></div>
+                <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-lg border border-zinc-800 p-3 bg-zinc-950/40"><div className="text-zinc-400">LTV por unidade</div><div className="text-zinc-200 font-medium">até 60% do valor de mercado</div></div>
+                  <div className="rounded-lg border border-zinc-800 p-3 bg-zinc-950/40"><div className="text-zinc-400">Liquidação</div><div className="text-zinc-200 font-medium">1º lance / pool quita</div></div>
+                </div>
+                <button className="mt-5 w-full px-5 py-3 rounded-lg bg-green-600/20 hover:bg-green-600/30 border border-green-500/40 text-green-200 font-medium">
+                  Emprestar {BRL.format(valor)} para a pool
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      );
+    };
+
+    /* ==========================
+       NFT / Imóvel Details
+    ========================== */
+    const NFTDetailsPage = ({ unit, project, onBack })=>{
+      if(!unit) return null;
+      const { tower, apt, price, floor, number, view, bedrooms, bathrooms, suites, area } = unit;
+      return (
+        <div className="space-y-6">
+          <button onClick={onBack} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200"><IArrowLeft className="w-4 h-4"/> Voltar</button>
+          <header className="space-y-1">
+            <h1 className="text-2xl md:text-3xl font-semibold">{project?.name} • {tower} — Apto {apt}</h1>
+            <p className="text-zinc-400">{project?.city}</p>
+          </header>
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+              <div className="aspect-video w-full rounded-xl border border-zinc-800 bg-zinc-950/60 relative overflow-hidden">
+                <div className="absolute inset-4 border-2 border-zinc-800 rounded-xl" />
+                <div className="absolute left-6 bottom-6 text-zinc-500 text-xs">Ilustração do imóvel</div>
+              </div>
+            </div>
+            <div className="lg:col-span-2 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 space-y-5">
+              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {[
+                  ["Torre", tower],["Andar", floor+"º"],["Número", number],
+                  ["Vista", view],["Quartos", bedrooms],["Banheiros", bathrooms],
+                  ["Suítes", suites],["Área", area+" m²"]
+                ].map(([k,v])=>(
+                  <div key={k} className="rounded-lg border border-zinc-800 p-3 bg-zinc-950/40">
+                    <div className="text-zinc-400 text-xs">{k}</div>
+                    <div className="text-zinc-100 font-medium capitalize">{v}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 justify-between pt-2">
+                <div><div className="text-zinc-400 text-sm">Preço</div><div className="text-zinc-100 text-2xl font-semibold">{BRL.format(price)}</div></div>
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <button className="flex-1 sm:flex-none rounded-lg bg-green-600/20 hover:bg-green-600/30 border border-green-500/40 px-4 py-2.5 text-green-200 font-medium">Compre agora</button>
+                  <button className="flex-1 sm:flex-none rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-zinc-200 font-medium">Faça uma oferta</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      );
+    };
+
+    /* ==========================
+       Infra (Conta): Login, Wallet 4337 (mock), Balance, KYC
+    ========================== */
+    function WalletPanel(){
+      const { user, wallet, settings, createWallet, updateBundler, updateChain, togglePaymaster, setSessKey, sendOp, uoLedger } = useApp();
+      const [bundlerUrl,setBundlerUrl] = useState(settings.bundlerUrl);
+      const [opNote,setOpNote] = useState("");
+      const [opTo,setOpTo] = useState("0x000000000000000000000000000000000000dEaD");
+
+      const handleSend = async ()=>{ await sendOp({to:opTo,data:"0x",note:opNote}); setOpNote(""); };
+
+      return (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">Wallet (Smart Account • EIP-4337)</h2>
+
+          {!user && <p className="text-zinc-400 text-sm">Faça login para criar sua smart wallet.</p>}
+
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-zinc-400 text-xs">Endereço</div>
+                <div className="font-mono text-sm text-zinc-100">{wallet? wallet.address : "—"}</div>
+              </div>
+              <button disabled={!user||!!wallet} onClick={createWallet}
+                className="px-3 py-2 rounded-lg bg-green-600/20 border border-green-500/40 text-green-200 disabled:opacity-40">Criar Smart Wallet</button>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-3 mt-4">
+              <div>
+                <div className="text-xs text-zinc-400 mb-1">Rede</div>
+                <select className="w-full rounded-lg bg-zinc-950/60 border border-zinc-800 px-3 py-2 text-zinc-100"
+                        value={settings.chain} onChange={(e)=>updateChain(e.target.value)}>
+                  <option value="base">Base</option>
+                  <option value="base-sepolia">Base Sepolia</option>
+                </select>
+              </div>
+              <div>
+                <div className="text-xs text-zinc-400 mb-1">Bundler URL</div>
+                <input className="w-full rounded-lg bg-zinc-950/60 border border-zinc-800 px-3 py-2 text-zinc-100"
+                       value={bundlerUrl} onChange={(e)=>setBundlerUrl(e.target.value)} onBlur={()=>updateBundler(bundlerUrl)} placeholder="https://bundler.example" />
+              </div>
+              <div className="flex items-end">
+                <label className="inline-flex items-center gap-2 text-sm">
+                  <input type="checkbox" className="accent-green-500" checked={settings.paymasterEnabled} onChange={(e)=>togglePaymaster(e.target.checked)} />
+                  Paymaster (gas patrocinado)
+                </label>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-3 mt-4">
+              <div className="md:col-span-2">
+                <div className="text-xs text-zinc-400 mb-1">Session key (opcional)</div>
+                <input className="w-full rounded-lg bg-zinc-950/60 border border-zinc-800 px-3 py-2 text-zinc-100"
+                       placeholder="chave curta para evitar pop-ups" defaultValue={settings.sessionKey||""} onBlur={(e)=>setSessKey(e.target.value)} />
+              </div>
+              <div>
+                <div className="text-xs text-zinc-400 mb-1">Enviar UO para</div>
+                <input className="w-full rounded-lg bg-zinc-950/60 border border-zinc-800 px-3 py-2 text-zinc-100 font-mono"
+                       value={opTo} onChange={(e)=>setOpTo(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <div className="text-xs text-zinc-400 mb-1">Nota (opcional)</div>
+              <div className="flex gap-2">
+                <input className="flex-1 rounded-lg bg-zinc-950/60 border border-zinc-800 px-3 py-2 text-zinc-100"
+                       value={opNote} onChange={(e)=>setOpNote(e.target.value)} />
+                <button onClick={handleSend} disabled={!wallet}
+                  className="px-4 py-2 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-200 disabled:opacity-40">Enviar UserOperation</button>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+            <div className="text-sm text-zinc-400 mb-2">Histórico de UserOperations</div>
+            <ul className="space-y-2 max-h-56 overflow-auto">
+              {uoLedger.length===0 && <li className="text-zinc-500 text-sm">Sem operações.</li>}
+              {uoLedger.map(it=>(
+                <li key={it.id} className="text-xs grid md:grid-cols-4 gap-2 border border-zinc-800 rounded-lg p-2">
+                  <div><span className="text-zinc-400">status:</span> {it.status}</div>
+                  <div className="truncate"><span className="text-zinc-400">to:</span> {it.to}</div>
+                  <div><span className="text-zinc-400">gas:</span> {it.paymaster}</div>
+                  <div className="truncate"><span className="text-zinc-400">bundler:</span> {it.bundlerUrl}</div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      );
+    }
+
+    function OperatingBalance(){
+      const { opBalance, opLedger, deposit, withdraw } = useApp();
+      const [amount, setAmount] = useState("");
+      const dep = ()=>{ const v=Number((amount||"0").replace(",",".")); if(v>0){ deposit(v); setAmount(""); } };
+      const wit = ()=>{ const v=Number((amount||"0").replace(",",".")); if(v>0){ withdraw(v); setAmount(""); } };
+      return (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">Operating Balance</h2>
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+            <div className="text-zinc-400 text-sm">Saldo</div>
+            <div className="text-2xl font-semibold text-zinc-100">{opBalance.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</div>
+            <div className="mt-4 grid md:grid-cols-3 gap-3">
+              <input value={amount} onChange={(e)=>setAmount(e.target.value)} placeholder="Valor (ex: 1000)"
+                     className="rounded-lg bg-zinc-950/60 border border-zinc-800 px-3 py-2 text-zinc-100"/>
+              <button onClick={dep} className="rounded-lg bg-green-600/20 hover:bg-green-600/30 border border-green-500/40 text-green-200 px-4 py-2">Depositar</button>
+              <button onClick={wit} className="rounded-lg bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-200 px-4 py-2">Sacar</button>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+            <div className="text-sm text-zinc-400 mb-2">Extrato</div>
+            <ul className="space-y-2 max-h-56 overflow-auto">
+              {opLedger.length===0 && <li className="text-zinc-500 text-sm">Sem movimentações.</li>}
+              {opLedger.map(tx=>(
+                <li key={tx.id} className="flex items-center justify-between text-xs border border-zinc-800 rounded-lg p-2">
+                  <span className="uppercase tracking-wide text-zinc-400">{tx.type}</span>
+                  <span>{tx.amount.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</span>
+                  <span className="text-zinc-500">{new Date(tx.timestamp).toLocaleString()}</span>
+                  <span className="text-zinc-400">saldo: {tx.balance.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      );
+    }
+
+    function KYCCenter(){
+      const { user, kyc, startKycMock } = useApp();
+      const [loading,setLoading] = useState(false);
+      const label = kyc?.status==="not_started"?"Iniciar verificação": kyc?.status==="in_progress"?"Continuar verificação": kyc?.status==="approved"?"Rever status":"Reiniciar";
+      const run = async ()=>{ setLoading(true); await startKycMock(); setLoading(false); };
+      return (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">KYC Center (opcional)</h2>
+          {!user && <p className="text-zinc-400 text-sm">Faça login para iniciar o KYC.</p>}
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+            <div className="text-sm text-zinc-400 mb-1">Status atual</div>
+            <div className="text-zinc-100 font-medium">{kyc?.status || "not_started"}</div>
+            <div className="flex items-center gap-3 mt-4">
+              <button disabled={!user||loading} onClick={run}
+                className="px-4 py-2 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-200 disabled:opacity-40">{label} (mock)</button>
+            </div>
+            <p className="text-xs text-zinc-500 mt-3">A plataforma funciona normalmente sem KYC.</p>
+          </div>
+        </div>
+      );
+    }
+
+    function InfraDashboard(){
+      const { user, loginEmail, loginPasskey, logout } = useApp();
+      const [email,setEmail] = useState("");
+      return (
+        <div className="space-y-8">
+          <header>
+            <h1 className="text-3xl font-bold">Conta & Infra</h1>
+            <p className="text-zinc-400">Sessão, Smart Wallet (EIP-4337), KYC opcional e saldo operacional.</p>
+          </header>
+
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-zinc-400 text-xs">Usuário</div>
+                <div className="text-zinc-100">{user ? (user.email || user.id) : "Não autenticado"}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                {!user ? (
+                  <>
+                    <input placeholder="email (mock)" value={email} onChange={(e)=>setEmail(e.target.value)}
+                      className="rounded-lg bg-zinc-950/60 border border-zinc-800 px-3 py-2 text-zinc-100"/>
+                    <button onClick={()=>loginEmail(email||"demo@local")} className="px-3 py-2 rounded-lg bg-green-600/20 border border-green-500/40 text-green-200">Login (email mock)</button>
+                    <button onClick={loginPasskey} className="px-3 py-2 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-200">Login (passkey stub)</button>
+                  </>
+                ) : (
+                  <button onClick={logout} className="px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200">Sair</button>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <WalletPanel />
+            <OperatingBalance />
+            <KYCCenter />
+          </section>
+        </div>
+      );
+    }
+
+    /* ==========================
+       App principal (tabs)
+    ========================== */
+    function PlatformApp(){
+      const [tab,setTab] = useState("empreendimentos");
+      const [selected,setSelected] = useState(null);
+      const [statusProject,setStatusProject] = useState(null);
+      const [newfiView,setNewfiView] = useState("home");
+      const [selectedUnit,setSelectedUnit] = useState(null);
+      const [selectedUnitProject,setSelectedUnitProject] = useState(null);
+
+      const openDetail = (p)=>{ setSelected(p); setTab("detalhes"); };
+      const openStatusDetail = (p)=> setStatusProject(p);
+      const goToNewFiCredit = ()=>{ setTab("newfi"); setNewfiView("credit"); };
+      const openUnitDetails = (unit, project)=>{ setSelectedUnit(unit); setSelectedUnitProject(project); setTab("nft"); };
+
+      return (
+        <div className="min-h-screen bg-zinc-950 text-zinc-50">
+          <TopMenu current={tab} onChange={(key)=>{
+            setTab(key);
+            if(key!=="detalhes") setSelected(null);
+            if(key!=="status") setStatusProject(null);
+            if(key==="newfi") setNewfiView("home");
+            if(key!=="nft"){ setSelectedUnit(null); setSelectedUnitProject(null); }
+          }}/>
+          <div className="max-w-6xl mx-auto px-6 py-8">
+            {tab==="empreendimentos" && <EmpreendimentosGrid onOpen={openDetail} />}
+
+            {tab==="detalhes" && selected && (
+              <ProjectDetailPage project={selected} onBack={()=>setTab("empreendimentos")}
+                                 onOpenServices={goToNewFiCredit} onOpenUnit={openUnitDetails} />
+            )}
+
+            {tab==="nft" && selectedUnit && (
+              <NFTDetailsPage unit={selectedUnit} project={selectedUnitProject} onBack={()=>setTab("detalhes")} />
+            )}
+
+            {tab==="status" && (
+              statusProject ? <CondoDetail project={statusProject} onBack={()=>setStatusProject(null)} /> : <ProjectList onOpen={openStatusDetail}/>
+            )}
+
+            {tab==="newfi" && (
+              newfiView==="home" ? (
+                <NewFiHome onOpenCredit={()=>setNewfiView("credit")} onOpenLend={()=>setNewfiView("lend")} onBackToMain={()=>setTab("empreendimentos")}/>
+              ) : newfiView==="credit" ? (
+                <ServicesPage project={selected || {name:"Condomínio Vila Nova"}} onBack={()=>setNewfiView("home")}/>
+              ) : (
+                <LendPage onBack={()=>setNewfiView("home")}/>
+              )
+            )}
+
+            {tab==="infra" && <InfraDashboard/>}
+          </div>
+        </div>
+      );
+    }
+
+    /* ==========================
+       Render
+    ========================== */
+    ReactDOM.createRoot(document.getElementById("root")).render(
+      <AppProvider>
+        <PlatformApp/>
+      </AppProvider>
+    );
+  </script>
+</body>
+</html>
+
+```
+
+---
+
+## Notas
+
+- Este código foi testado e funcionou bem em termos de UI
+- Pode ser usado como base ou inspiração para o desenvolvimento
+- Adapte conforme necessário para o projeto RealMintGPT
+- este projeto simula um fluxo ilustrativo, eu quero que você também mantenha esta atribuição de simulação, pois estamos fazendo um site mockup de vendas para explicar o produto num hackathon
+
